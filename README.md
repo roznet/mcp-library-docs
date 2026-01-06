@@ -92,7 +92,7 @@ Or use an absolute path to the Python interpreter if needed:
 When Claude calls `list_libraries`, the server:
 
 1. **Auto-discovers current project**: Walks up from Claude's working directory to find the nearest `designs/INDEX.md`
-2. **Loads external libraries**: Reads any libraries configured in `~/.config/mcp-library-docs/config.yaml`
+2. **Loads external libraries**: Reads any libraries configured in `config.yaml` (see [Config File Location](#config-file-location))
 3. **Returns combined index**: All INDEX.md contents with type tags (`[current project]`, `[library]`, `[project]`)
 
 Claude can then call `get_design_doc(library, topic)` to read detailed documentation.
@@ -101,7 +101,27 @@ Claude can then call `get_design_doc(library, topic)` to read detailed documenta
 
 Configuration is **optional**. Without it, the server just discovers the current project.
 
-Create `~/.config/mcp-library-docs/config.yaml` to register external libraries:
+### Config File Location
+
+The server searches for `config.yaml` in platform-specific locations:
+
+| Platform | Primary Location | Fallback |
+|----------|-----------------|----------|
+| Linux | `~/.config/mcp-library-docs/` | - |
+| macOS | `~/.config/mcp-library-docs/` | `~/Library/Application Support/mcp-library-docs/` |
+| Windows | `%APPDATA%\mcp-library-docs\` | `~/.config/mcp-library-docs/` |
+
+The first existing directory is used. If none exist, the primary location is used.
+
+**Environment variable override:** Set `MCP_LIBRARY_DOCS_CONFIG_DIR` to use a custom location:
+
+```bash
+export MCP_LIBRARY_DOCS_CONFIG_DIR=/custom/path
+```
+
+### Config File Format
+
+Create `config.yaml` in the config directory to register external libraries:
 
 ```yaml
 # Global defaults (all optional)

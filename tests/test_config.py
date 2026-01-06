@@ -2,16 +2,20 @@
 
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from mcp_library_docs.config import (
+    CONFIG_DIR_ENV,
     DEFAULT_CACHE,
     DEFAULT_DESIGNS_DIR,
     DEFAULT_INDEX_FILE,
     DEFAULT_TYPE,
     Config,
     LibraryConfig,
+    _get_config_search_paths,
+    get_config_dir,
     load_config,
 )
 
@@ -239,3 +243,102 @@ class TestConfig:
         assert config.index_file == "INDEX.md"
         assert config.cache == "dynamic"
         assert config.libraries == {}
+
+
+class TestGetConfigSearchPaths:
+    """Tests for platform-specific config path discovery."""
+
+    def test_linux_paths(self):
+        """Linux should only search ~/.config."""
+        with mock.patch("mcp_library_docs.config.sys.platform", "linux"):
+            paths = _get_config_search_paths()
+
+        assert len(paths) == 1
+        assert paths[0] == Path.home() / ".config" / "mcp-library-docs"
+
+    def test_darwin_paths(self):
+        """macOS should search .config first, then Library/Application Support."""
+        with mock.patch("mcp_library_docs.config.sys.platform", "darwin"):
+            paths = _get_config_search_paths()
+
+        assert len(paths) == 2
+        assert paths[0] == Path.home() / ".config" / "mcp-library-docs"
+        assert paths[1] == Path.home() / "Library" / "Application Support" / "mcp-library-docs"
+
+    def test_windows_paths_with_appdata(self):
+        """Windows should search AppData first, then .config."""
+        with mock.patch("mcp_library_docs.config.sys.platform", "win32"):
+            with mock.patch.dict("os.environ", {"APPDATA": "C:\\Users\\Test\\AppData\\Roaming"}):
+                paths = _get_config_search_paths()
+
+        assert len(paths) == 2
+        assert paths[0] == Path("C:\\Users\\Test\\AppData\\Roaming") / "mcp-library-docs"
+        assert paths[1] == Path.home() / ".config" / "mcp-library-docs"
+
+    def test_windows_paths_without_appdata(self):
+        """Windows without APPDATA should fall back to .config only."""
+        with mock.patch("mcp_library_docs.config.sys.platform", "win32"):
+            with mock.patch.dict("os.environ", {}, clear=True):
+                # Need to preserve HOME or USERPROFILE for Path.home()
+                with mock.patch("pathlib.Path.home", return_value=Path("/mock/home")):
+                    paths = _get_config_search_paths()
+
+        assert len(paths) == 1
+        assert paths[0] == Path("/mock/home") / ".config" / "mcp-library-docs"
+
+
+class TestGetConfigDir:
+    """Tests for config directory resolution."""
+
+    def test_env_var_override(self, temp_config_dir):
+        """Environment variable should override platform defaults."""
+        custom_dir = temp_config_dir / "custom-config"
+        custom_dir.mkdir()
+
+        with mock.patch.dict("os.environ", {CONFIG_DIR_ENV: str(custom_dir)}):
+            result = get_config_dir()
+
+        assert result == custom_dir
+
+    def test_env_var_expands_tilde(self):
+        """Environment variable should expand ~ in path."""
+        with mock.patch.dict("os.environ", {CONFIG_DIR_ENV: "~/my-config"}):
+            result = get_config_dir()
+
+        assert result == (Path.home() / "my-config").resolve()
+
+    def test_returns_existing_path(self, temp_config_dir, monkeypatch):
+        """Should return first existing directory from search paths."""
+        existing_dir = temp_config_dir / "mcp-library-docs"
+        existing_dir.mkdir()
+
+        # Clear env var override
+        monkeypatch.delenv(CONFIG_DIR_ENV, raising=False)
+
+        with mock.patch(
+            "mcp_library_docs.config._get_config_search_paths",
+            return_value=[
+                temp_config_dir / "nonexistent",
+                existing_dir,
+                temp_config_dir / "also-nonexistent",
+            ],
+        ):
+            result = get_config_dir()
+
+        assert result == existing_dir
+
+    def test_returns_first_path_when_none_exist(self, temp_config_dir, monkeypatch):
+        """Should return first (preferred) path when none exist."""
+        first_path = temp_config_dir / "first"
+        second_path = temp_config_dir / "second"
+
+        # Clear env var override
+        monkeypatch.delenv(CONFIG_DIR_ENV, raising=False)
+
+        with mock.patch(
+            "mcp_library_docs.config._get_config_search_paths",
+            return_value=[first_path, second_path],
+        ):
+            result = get_config_dir()
+
+        assert result == first_path

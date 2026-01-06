@@ -51,9 +51,11 @@ When working across multiple libraries and projects:
     INDEX.md            # Or configured name
     {topic}.md
 
-# Config location (optional)
-~/.config/mcp-library-docs/
-  config.yaml
+# Config location (optional, platform-specific)
+# Linux/macOS: ~/.config/mcp-library-docs/config.yaml
+# macOS fallback: ~/Library/Application Support/mcp-library-docs/config.yaml
+# Windows: %APPDATA%\mcp-library-docs\config.yaml
+# Override: MCP_LIBRARY_DOCS_CONFIG_DIR env var
 
 # External libraries (from config)
 {library_path}/
@@ -236,8 +238,15 @@ Configuration is optional. Without config, the server discovers the current proj
 
 ### Config location
 
-- **Linux/macOS:** `~/.config/mcp-library-docs/config.yaml`
-- **Windows (future):** `%APPDATA%\mcp-library-docs\config.yaml`
+The server searches for `config.yaml` in platform-specific locations:
+
+| Platform | Primary | Fallback |
+|----------|---------|----------|
+| Linux | `~/.config/mcp-library-docs/` | - |
+| macOS | `~/.config/mcp-library-docs/` | `~/Library/Application Support/mcp-library-docs/` |
+| Windows | `%APPDATA%\mcp-library-docs\` | `~/.config/mcp-library-docs/` |
+
+The first existing directory is used. Override with `MCP_LIBRARY_DOCS_CONFIG_DIR` env var.
 
 ### Config schema
 
@@ -427,7 +436,6 @@ Add to project CLAUDE.md files:
 - **`search_libraries(query)`** - Search across all docs
 - **`verify_doc(library, topic)`** - Check if doc is stale vs recent commits
 - **`update_doc_timestamp(library, topic, commit_sha)`** - Mark doc as verified
-- **Cross-platform paths** - Full Windows support with `platformdirs`
 - **Watch mode** - Reload config on changes
 - **Remote transport** - SSE/WebSocket for non-local usage
 
