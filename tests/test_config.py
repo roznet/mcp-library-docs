@@ -161,6 +161,139 @@ libraries:
 
         assert lib.type == "project"
 
+    def test_library_related_list(self, temp_config_dir, temp_library):
+        """Should read related libraries as a list."""
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+libraries:
+  my-lib:
+    path: {temp_library}
+    type: project
+    related: [other-lib, another-lib]
+""")
+        config = load_config(config_path)
+        lib = config.libraries["my-lib"]
+
+        assert lib.related == ["other-lib", "another-lib"]
+
+    def test_library_related_string(self, temp_config_dir, temp_library):
+        """Should handle single related library as string."""
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+libraries:
+  my-lib:
+    path: {temp_library}
+    type: project
+    related: other-lib
+""")
+        config = load_config(config_path)
+        lib = config.libraries["my-lib"]
+
+        assert lib.related == ["other-lib"]
+
+    def test_library_related_defaults_empty(self, temp_config_dir, temp_library):
+        """Should default to empty list when no related specified."""
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+libraries:
+  my-lib:
+    path: {temp_library}
+""")
+        config = load_config(config_path)
+        lib = config.libraries["my-lib"]
+
+        assert lib.related == []
+
+
+class TestLoadConfigProjects:
+    """Tests for the projects: section."""
+
+    def test_loads_project(self, temp_config_dir, temp_library):
+        """Should load project with type=project."""
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+projects:
+  my-app:
+    path: {temp_library}
+""")
+        config = load_config(config_path)
+
+        assert "my-app" in config.libraries
+        proj = config.libraries["my-app"]
+        assert proj.name == "my-app"
+        assert proj.type == "project"
+
+    def test_project_with_related(self, temp_config_dir):
+        """Should load project with related projects."""
+        proj1 = temp_config_dir / "app"
+        proj2 = temp_config_dir / "server"
+        for p in [proj1, proj2]:
+            designs = p / "designs"
+            designs.mkdir(parents=True)
+            (designs / "INDEX.md").write_text("# Project\n")
+
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+projects:
+  app:
+    path: {proj1}
+    related: [server]
+  server:
+    path: {proj2}
+    related: [app]
+""")
+        config = load_config(config_path)
+
+        assert config.libraries["app"].related == ["server"]
+        assert config.libraries["server"].related == ["app"]
+        assert config.libraries["app"].type == "project"
+        assert config.libraries["server"].type == "project"
+
+    def test_mixed_libraries_and_projects(self, temp_config_dir):
+        """Should load both libraries and projects sections."""
+        lib_path = temp_config_dir / "lib"
+        proj_path = temp_config_dir / "proj"
+        for p in [lib_path, proj_path]:
+            designs = p / "designs"
+            designs.mkdir(parents=True)
+            (designs / "INDEX.md").write_text("# Stuff\n")
+
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+libraries:
+  my-lib:
+    path: {lib_path}
+
+projects:
+  my-proj:
+    path: {proj_path}
+    related: [my-lib]
+""")
+        config = load_config(config_path)
+
+        assert len(config.libraries) == 2
+        assert config.libraries["my-lib"].type == "library"
+        assert config.libraries["my-proj"].type == "project"
+        assert config.libraries["my-proj"].related == ["my-lib"]
+
+    def test_project_inherits_global_defaults(self, temp_config_dir, temp_library):
+        """Project should inherit global defaults."""
+        config_path = temp_config_dir / "config.yaml"
+        config_path.write_text(f"""
+defaults:
+  designs_dir: docs
+  cache: static
+
+projects:
+  my-app:
+    path: {temp_library}
+""")
+        config = load_config(config_path)
+        proj = config.libraries["my-app"]
+
+        assert proj.designs_dir == "docs"
+        assert proj.cache == "static"
+
     def test_expands_tilde_in_path(self, temp_config_dir):
         """Should expand ~ in library paths."""
         config_path = temp_config_dir / "config.yaml"
@@ -232,6 +365,7 @@ class TestLibraryConfig:
         assert lib.designs_dir == "designs"
         assert lib.index_file == "INDEX.md"
         assert lib.cache == "dynamic"
+        assert lib.related == []
 
 
 class TestConfig:

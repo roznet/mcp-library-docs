@@ -93,6 +93,7 @@ class LibraryConfig:
     designs_dir: str = DEFAULT_DESIGNS_DIR
     index_file: str = DEFAULT_INDEX_FILE
     cache: Literal["static", "dynamic"] = DEFAULT_CACHE
+    related: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -143,33 +144,51 @@ def load_config(config_path: Path | None = None) -> Config:
         cache=defaults.get("cache", DEFAULT_CACHE),
     )
 
-    # Parse libraries
-    libraries_raw = raw.get("libraries", {})
-    for name, lib_raw in libraries_raw.items():
-        if not isinstance(lib_raw, dict):
-            logger.warning(f"Invalid library config for '{name}', skipping")
+    # Parse libraries and projects sections
+    # Both go into config.libraries, with type set based on section
+    for section, default_type in [("libraries", "library"), ("projects", "project")]:
+        section_raw = raw.get(section, {})
+        if not section_raw:
             continue
 
-        path_str = lib_raw.get("path")
-        if not path_str:
-            logger.warning(f"Library '{name}' has no path, skipping")
-            continue
+        for name, entry_raw in section_raw.items():
+            if not isinstance(entry_raw, dict):
+                logger.warning(f"Invalid {section} config for '{name}', skipping")
+                continue
 
-        # Expand ~ in path
-        path = Path(path_str).expanduser().resolve()
+            path_str = entry_raw.get("path")
+            if not path_str:
+                logger.warning(f"{section.capitalize()} '{name}' has no path, skipping")
+                continue
 
-        if not path.exists():
-            logger.warning(f"Library '{name}' path does not exist: {path}, skipping")
-            continue
+            # Expand ~ in path
+            path = Path(path_str).expanduser().resolve()
 
-        config.libraries[name] = LibraryConfig(
-            name=name,
-            path=path,
-            type=lib_raw.get("type", DEFAULT_TYPE),
-            designs_dir=lib_raw.get("designs_dir", config.designs_dir),
-            index_file=lib_raw.get("index_file", config.index_file),
-            cache=lib_raw.get("cache", config.cache),
-        )
+            if not path.exists():
+                logger.warning(f"{section.capitalize()} '{name}' path does not exist: {path}, skipping")
+                continue
 
-    logger.info(f"Loaded config with {len(config.libraries)} external libraries")
+            # Parse related list
+            related_raw = entry_raw.get("related", [])
+            if isinstance(related_raw, str):
+                related = [related_raw]
+            elif isinstance(related_raw, list):
+                related = [r for r in related_raw if isinstance(r, str)]
+            else:
+                related = []
+
+            # Type can be overridden in libraries section, but defaults based on section
+            entry_type = entry_raw.get("type", default_type)
+
+            config.libraries[name] = LibraryConfig(
+                name=name,
+                path=path,
+                type=entry_type,
+                designs_dir=entry_raw.get("designs_dir", config.designs_dir),
+                index_file=entry_raw.get("index_file", config.index_file),
+                cache=entry_raw.get("cache", config.cache),
+                related=related,
+            )
+
+    logger.info(f"Loaded config with {len(config.libraries)} external libraries/projects")
     return config

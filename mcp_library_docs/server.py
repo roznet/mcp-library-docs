@@ -36,9 +36,13 @@ def _format_library_entry(
     name: str,
     content: str,
     lib_type: str,
+    related: list[str] | None = None,
 ) -> str:
     """Format a library entry for the response."""
-    return f"# {name} [{lib_type}]\n{content}"
+    header = f"# {name} [{lib_type}]"
+    if related:
+        header += f"\nRelated: {', '.join(related)}"
+    return f"{header}\n{content}"
 
 
 @server.list_tools()
@@ -159,9 +163,12 @@ async def _handle_list_libraries(arguments: dict) -> list[TextContent]:
 
             content = cache.get_index(name)
             if content:
-                results.append(_format_library_entry(name, content, lib_config.type))
+                results.append(_format_library_entry(
+                    name, content, lib_config.type, lib_config.related
+                ))
             else:
-                results.append(f"# {name} [{lib_config.type}]\n> No INDEX.md found")
+                related_str = f"\nRelated: {', '.join(lib_config.related)}" if lib_config.related else ""
+                results.append(f"# {name} [{lib_config.type}]{related_str}\n> No INDEX.md found")
 
     if not results:
         return [TextContent(

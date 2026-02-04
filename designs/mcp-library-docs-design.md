@@ -91,6 +91,20 @@ def find_current_project(cwd: Path, designs_dir: str = "designs") -> Path | None
 | `library` | `[library]` | "I can/should import and reuse this code" |
 | `project` | `[project]` | "Learn patterns and conventions, but don't import" |
 
+### Related projects
+
+Projects can declare relationships to other projects using the `related` field. This helps Claude understand that when working on one project, it should also consult the design docs of related projects for context (e.g., API contracts, shared models).
+
+**Example:** A mobile app (`connectstats`) and its backend server (`connectstats_server`) are related - when working on either, Claude should check both for API contracts and data models.
+
+**Output format:** When a library has related projects, the header includes them:
+```
+# connectstats [project]
+Related: connectstats_server
+
+<INDEX.md content>
+```
+
 ## MCP Tools
 
 ### 1. `list_libraries`
@@ -257,24 +271,31 @@ defaults:
   index_file: INDEX.md      # Index file name
   cache: dynamic            # Default cache strategy: "static" or "dynamic"
 
-# External libraries (optional - current project is auto-discovered)
+# Reusable libraries - code you import and use
 libraries:
   lib-utils:
     path: ~/projects/lib-utils
-    type: library           # "library" (default) or "project"
-    # Uses global defaults for designs_dir, index_file, cache
+    # type defaults to "library" in this section
 
+  active-lib:
+    path: ~/projects/active-lib
+    cache: dynamic          # Always read fresh
+
+# Reference projects - patterns and architecture to learn from, not import
+projects:
   legacy-app:
     path: ~/projects/legacy-app
-    type: project           # Reference for patterns, not for importing
     designs_dir: docs/architecture  # Override default
     index_file: README.md           # Override default
     cache: static                   # Never re-read after startup
 
-  active-lib:
-    path: ~/projects/active-lib
-    type: library
-    cache: dynamic          # Always read fresh
+  connectstats:
+    path: ~/projects/connectstats
+    related: [connectstats_server]  # Check server docs too
+
+  connectstats_server:
+    path: ~/projects/connectstats_server
+    related: [connectstats]         # Check app docs too
 ```
 
 ### Config field reference
@@ -284,11 +305,15 @@ libraries:
 | `defaults.designs_dir` | global | `designs` | Directory name containing design docs |
 | `defaults.index_file` | global | `INDEX.md` | Index file name |
 | `defaults.cache` | global | `dynamic` | Default caching strategy |
-| `libraries.{name}.path` | per-library | required | Path to library root (~ expanded) |
-| `libraries.{name}.type` | per-library | `library` | `library` or `project` |
-| `libraries.{name}.designs_dir` | per-library | from defaults | Override designs directory name |
-| `libraries.{name}.index_file` | per-library | from defaults | Override index file name |
-| `libraries.{name}.cache` | per-library | from defaults | `static` or `dynamic` |
+| `libraries.{name}.path` | per-entry | required | Path to library root (~ expanded) |
+| `libraries.{name}.type` | per-entry | `library` | Can override to `project` if needed |
+| `libraries.{name}.designs_dir` | per-entry | from defaults | Override designs directory name |
+| `libraries.{name}.index_file` | per-entry | from defaults | Override index file name |
+| `libraries.{name}.cache` | per-entry | from defaults | `static` or `dynamic` |
+| `libraries.{name}.related` | per-entry | `[]` | List of related library names to cross-reference |
+| `projects.{name}.*` | per-entry | same as above | Same fields as libraries, but type defaults to `project` |
+
+**Note:** The `libraries:` and `projects:` sections are equivalent except for the default `type`. Use `libraries:` for reusable code you import, and `projects:` for reference architectures and patterns.
 
 ### Caching behavior
 
