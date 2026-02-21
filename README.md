@@ -2,6 +2,8 @@
 
 An MCP server that gives Claude access to design documentation across multiple code libraries/repositories. This enables Claude to discover existing utilities, patterns, and conventions - preventing reimplementation of existing functionality.
 
+For tips on how I use this server as part of a broader AI-assisted development workflow, see [AI Dev Workflow Tips](ai-dev-workflow.md).
+
 ## Installation
 
 ```bash
