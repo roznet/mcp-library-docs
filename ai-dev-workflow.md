@@ -1,6 +1,8 @@
 # AI-Assisted Development with Claude: Tips from My Workflow
 
 > This document describes how my AI-assisted development workflow has evolved over time — what's worked for me, what I've learned, and how I use Claude Code, MCP servers, and design docs to stay productive. It's not "the one true way" — it's advice and patterns I've found useful, and I hope some of it helps you too.
+>
+> The [README](README.md) has the condensed version and a step-by-step adoption guide. The real skills described here are public in [flyfun-weather/.claude](https://github.com/roznet/flyfun-weather/tree/main/.claude).
 
 ## Preamble: Markdown as Infrastructure
 
@@ -14,18 +16,25 @@ your-repo/
 │   ├── INDEX.md                    # Overview + links to all design docs
 │   ├── pricing-engine.md           # Feature/component design documents
 │   ├── market-data-loader.md
-│   └── subsystems/
-│       ├── risk-aggregation.md
-│       └── portfolio-analytics.md
+│   ├── future/                     # Brainstorms and designs not yet built
+│   ├── plans/                      # Implementation plans for in-flight work
+│   ├── archive/                    # Superseded designs, kept for history
+│   └── references/                 # Runbook data that skills cite
 ├── .claude/
-│   ├── settings.json               # MCP server configuration
+│   ├── CLAUDE.md                   # Project-level instructions for Claude
+│   ├── settings.json               # Project permissions
+│   ├── commands/                   # Older-style slash commands (code-review, process-review)
 │   └── skills/
-│       ├── sync-designs/SKILL.md   # Custom skills (slash commands)
-│       ├── validate-arch/SKILL.md
-│       └── pre-review/SKILL.md
-├── src/
-└── CLAUDE.md                       # Project-level instructions for Claude
+│       ├── implement-issue/SKILL.md   # Project skills (slash commands)
+│       ├── land-pr/SKILL.md
+│       ├── worktree-init/SKILL.md
+│       └── deploy/SKILL.md
+├── .github/workflows/
+│   └── claude-code-review.yml      # Review bot on every PR push
+└── src/
 ```
+
+`/sync-designs` isn't in that tree because it's installed once at user level (`~/.claude/skills/`) and used in every repo.
 
 ### Why I Think It Works
 
@@ -41,17 +50,13 @@ The [mcp-library-docs](https://github.com/roznet/mcp-library-docs) MCP server ad
 - Call `get_design_doc(library, topic)` to load a specific doc on demand
 - Distinguish between `[current project]`, `[library]` (importable code), and `[project]` (patterns/reference only)
 
-Setup in `.claude/settings.json` or `.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "library-docs": {
-      "command": "python",
-      "args": ["-m", "mcp_library_docs"]
-    }
-  }
-}
+Setup, once for all projects:
+```bash
+pip install mcp-library-docs
+claude mcp add --scope user library-docs -- python -m mcp_library_docs
 ```
+
+Add a short "Always start here" rule to `CLAUDE.md` telling Claude to call `list_libraries` before grepping (the README has the exact block). Without it, Claude often skips the docs.
 
 External libraries can be registered in a `config.yaml` so Claude knows about shared utilities, internal frameworks, and reference projects — and knows whether to import from them or just learn patterns.
 
@@ -218,8 +223,8 @@ In Claude Code, skills are markdown files stored in `.claude/skills/{name}/SKILL
 
 ```
 /sync-designs market-data-loader
-/validate-arch src/pricing/
-/pre-review
+/implement-issue 42
+/land-pr 57
 ```
 
 A skill file (e.g. `.claude/skills/sync-designs/SKILL.md`) looks like this:
@@ -228,7 +233,7 @@ A skill file (e.g. `.claude/skills/sync-designs/SKILL.md`) looks like this:
 ---
 name: sync-designs
 description: Review and update design documents to stay in sync with code.
-allowed-tools: Read, Grep, Glob, Edit, Write, Task
+allowed-tools: Read, Grep, Glob, Edit, Write, Agent
 ---
 
 # Design Document Sync
@@ -252,34 +257,34 @@ Determine the mode based on arguments:
 4. Update INDEX.md: Add entry with `→ Full doc: name.md`
 ```
 
-The frontmatter (`---` block) tells Claude which tools the skill is allowed to use: `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Task` (for spawning sub-agents). The `name` field determines the slash command.
+The frontmatter (`---` block) holds the skill's `name` (the slash command), a `description` (which Claude also uses to decide when the skill applies), and optionally `allowed-tools`. Two other frontmatter settings matter in practice:
 
-### Skills I've Found Useful
+- **`disable-model-invocation: true`** means the skill only runs when *I* type it. I set it on everything that acts on the outside world: merging, deploying, releasing.
+- **Where the skill lives** decides where it works. `.claude/skills/` in a repo is project-only; `~/.claude/skills/` works everywhere. `sync-designs` is generic, so it lives at user level; `land-pr` knows the project's CI and toolchain, so it lives in the repo.
 
-**`/sync-designs [target]`** — The skill I use most. Keeps design docs aligned with code. Three modes:
-- No args: audits all docs in `designs/` against current code
-- Design doc path: syncs a specific doc
-- Code path: creates a new design doc from existing code
+### Skills I Actually Use
 
-This is how I bootstrap design docs for an existing codebase — point it at a directory and let it explore and document.
+These are the ones that earned their place, with links to the real files:
 
-**`/validate-arch [path]`** — Reviews code changes against documented architecture decisions. Reads the relevant design doc(s) and flags code that violates stated patterns, contradicts key choices, or introduces inconsistencies. I find it useful before submitting changes.
+**[`/sync-designs [target]`](.claude/skills/sync-designs/SKILL.md)** — Keeps design docs aligned with code. No args audits everything in `designs/`; a doc path syncs one doc; a code path creates a new doc from existing code. This is how I bootstrap docs for an existing codebase, and how a PR updates the docs for the code it touched.
 
-**`/pre-review`** — Project-specific checklist before code review. Checks naming conventions, test coverage patterns, error handling conventions, and anything else you've standardized. Reads the project's `CLAUDE.md` and relevant design docs to know what "correct" looks like.
+**[`/implement-issue <n>`](https://github.com/roznet/flyfun-weather/blob/main/.claude/skills/implement-issue/SKILL.md)** — Takes a GitHub issue end to end: reads the whole comment thread and the design docs, works out whether it's running in the cloud or locally and whether I'm watching, branches, implements, runs what it can verify, updates the touched design docs, and opens a PR. It ends with an **Owner's brief**: what changes for the user, the decisions it made for me, how it could go wrong, what was verified versus only claimed, and specific questions I should ask. I don't read every diff line, so the brief is how I stay in control of what ships.
 
-**`/debug-guide [description]`** — Structured debugging workflow: read relevant context docs → reproduce the issue → form hypotheses → instrument → fix → verify → update design doc if the fix reveals a new gotcha.
+**[`/process-review [pr]`](https://github.com/roznet/flyfun-weather/blob/main/.claude/commands/process-review.md)** — Waits for the review bot's comment (Section 6), triages each finding as blocker, cosmetic or unsure, and only pushes when there's a real blocker. Every push triggers another full review, so when it does push it batches in everything worth fixing.
 
-**`/create-feature-design [name]`** — Bootstraps a new feature design doc from the template and guides you through an interactive design session.
+**[`/land-pr <n>`](https://github.com/roznet/flyfun-weather/blob/main/.claude/skills/land-pr/SKILL.md)** — For when I've decided a PR is going in. Checks CI and every review round, runs locally what the cloud couldn't (iOS build and UI tests), rebase-merges, then fixes the remaining findings with a direct commit on main instead of another PR round. It updates design docs and memory notes, and ends with a short landing summary including what the deploy will need. It never deploys.
 
-### The Task Tool: Parallel Sub-Agents
+**[`/worktree-init <branch>`](https://github.com/roznet/flyfun-weather/blob/main/.claude/skills/worktree-init/SKILL.md)** and **`/devserver`** — A sibling git worktree per issue, each with its own venv and dev-server port, so several sessions can work in parallel without stepping on each other.
 
-Claude Code's `Task` tool lets a skill spawn sub-agents for complex work. The `sync-designs` skill uses this when exploring a large codebase:
+**`/deploy`** — Pre-flight checks, then a hard stop that needs my explicit "yes" in a separate turn. I added that gate after a deploy was reported as done when it had never actually run.
 
-- Main agent orchestrates the overall sync
-- Sub-agents explore individual modules in parallel
-- Results are collected and synthesized into coherent design docs
+**How these skills got written.** Almost none were designed up front. When I noticed I'd typed the same multi-step instructions several times, I asked Claude to turn that conversation into a skill, ran it on two or three real PRs, and fixed what went wrong. I also periodically ask Claude to read my recent session transcripts and suggest changes to my process; several skills and rules came out of that.
 
-This is particularly useful for the initial bootstrap of design docs across a large project.
+### Subagents (the Agent Tool)
+
+Claude Code's `Agent` tool lets a session or skill spawn subagents with their own context. I use them less than you might expect: for parallel reviews of a big PR (one per language or area), for audits, and for an independent second opinion on a PR's brief. With good design docs, a single session usually has the context it needs, and that's cheaper than fanning out.
+
+For one heavy job I use a **Workflow** script instead: [`/sync-all-designs`](https://github.com/roznet/flyfun-weather/blob/main/.claude/commands/sync-all-designs.md) runs one subagent per design doc in a resumable workflow, then reconciles `INDEX.md`. It's expensive, so I run it occasionally rather than routinely.
 
 ### CLAUDE.md: Project-Level Instructions
 
@@ -367,7 +372,7 @@ In my experience, context pollution degrades quality even in large context windo
 ### Claude-Specific Advantages
 
 - Claude can read the full plan and the full design doc simultaneously without context pressure
-- The `Task` tool can parallelize independent steps of the plan
+- Subagents (the `Agent` tool) can parallelize independent steps of the plan
 - Claude can run tests after each step to verify before moving to the next
 - If the plan needs adjustment mid-implementation, Claude updates the saved plan document rather than just changing direction in the conversation
 
@@ -431,9 +436,15 @@ Feed your full `designs/INDEX.md` and a few key design docs to a fresh session:
 **Cross-model validation:**
 Using a different model (Gemini, GPT-4) for review adds diversity — different models have different blind spots and training biases. This is especially valuable for design review where reasoning patterns matter more than code syntax.
 
-### The `/validate-arch` Skill
+### The Review Bot
 
-For routine validation, the `/validate-arch` skill automates the check: it reads the relevant design docs, compares them against the current code, and flags violations. This is faster than manual cross-validation for known patterns, though it doesn't replace the value of a genuinely fresh perspective for design-level review.
+For routine review, I don't open a fresh session by hand. A [GitHub Action](https://github.com/roznet/flyfun-weather/blob/main/.github/workflows/claude-code-review.yml) (set up with `/install-github-app`) runs my [`/code-review`](https://github.com/roznet/flyfun-weather/blob/main/.claude/commands/code-review.md) command on every push to a PR. Because it runs in CI, it's a genuinely fresh session with no stake in the implementation. A few things made it work well:
+
+- **One complete pass.** The prompt insists on reporting every finding at once, grouped as Critical, Important and Minor, instead of drip-feeding issues over several rounds.
+- **Post before finishing.** In CI there's no follow-up turn, so a review that isn't posted didn't happen. The command says so explicitly.
+- **A fixed output format.** `/process-review` and `/land-pr` find the review by matching its first line, so the comment shape is a contract written into both the reviewer and the reader. Make the reader tolerant anyway: the format drifted once and the watcher silently found nothing.
+
+For high-risk PRs I add [`/brief-check`](https://github.com/roznet/flyfun-weather/blob/main/.claude/skills/brief-check/SKILL.md): a separate agent re-derives the Owner's brief from the diff and the issue, and posts what the implementing agent missed, understated or overstated.
 
 ---
 
@@ -498,12 +509,15 @@ I keep design docs with the code and follow the same branching and review proces
 - **PRs that change architecture update design docs.** I try to make this a review checklist item. If you change how market data caching works, `designs/market-data-loader.md` should ideally be updated in the same PR.
 - **Run `/sync-designs` before PRs.** The skill catches docs that have drifted from the code.
 - **Design docs as PR descriptions.** Linking to or summarizing the relevant design doc gives reviewers context they'd otherwise have to infer from the diff.
+- **Merge, then fix on main.** Once I've decided a PR is good enough, leftover minor findings get fixed in a direct follow-up commit on main (`/land-pr` does this). Another PR round would cost another full review for little gain.
+- **Brainstorms are committed too.** Design discussions end with *"save the brainstorm into a designs/future document, commit it to main, then create the issue referring to it"*. Decisions made later go in issue comments, and `CLAUDE.md` tells Claude to read the whole comment thread, not just the issue body.
 
 ### Stale Doc Prevention
 
 Stale docs are worse than no docs. Here's what I do to fight staleness:
 
-- Run `/sync-designs` periodically (daily or after significant commits)
+- Make the implementing skill update the docs for the code it touched, in the same PR (`/implement-issue` does this, and `/land-pr` checks it)
+- Run `/sync-designs` periodically, or the full `/sync-all-designs` workflow after a big feature lands
 - Use `get_index_status` to check for missing or orphaned entries
 - Add a CI step that flags PRs modifying files referenced in a design doc's File Map when the design doc itself hasn't been modified
 - The `/sync-designs` skill has been my main tool for this — it reads the code and updates docs, catching drift that I'd miss manually
@@ -521,6 +535,7 @@ Here's what a typical session looks like for me on a non-trivial task:
 5. Execute incrementally, test after each step
 6. Cross-validate with a fresh session when done
 7. Run `/sync-designs` if architecture changed
+8. `/clear` and start fresh for the next task. I use `/clear` far more than `/compact`
 
 ---
 
@@ -534,14 +549,17 @@ Once your `designs/` directory, `CLAUDE.md`, skills, and MCP server are all in p
 
 1. **Create a GitHub issue from your phone.** I use the GitHub mobile app. The issue description is essentially a prompt — I write it the same way I'd describe a task to Claude: clear intent, constraints, and what "done" looks like.
 
-2. **Open Claude on your phone.** I pull up the Claude app, start a Claude Code session and give it a short prompt:
-   *"Work on and implement issue #42. Make sure you read the design docs first."*
+2. **Open Claude on your phone.** I pull up the Claude app, start a Claude Code session on the web and run `/implement-issue 42`. Before that skill existed, the prompt was simply *"Work on and implement issue #42. Make sure you read the design docs first."*
 
-3. **Go do something else.** Walk the dog, commute, make dinner — whatever. Claude reads the design docs via MCP, understands the codebase context, implements the feature, writes tests, and opens a PR.
+3. **Go do something else.** Walk the dog, commute, make dinner — whatever. Claude reads the design docs (via MCP locally; in a cloud session, where my local MCP server isn't available, the `CLAUDE.md` fallback points it at `designs/INDEX.md` directly), understands the codebase context, implements the feature, writes tests, and opens a PR.
 
-4. **Come back to a PR ready for review.** By the time I'm back at my desk, there's usually a pull request waiting with proper tests, consistent patterns, and code that follows the conventions documented in `CLAUDE.md` and the design docs.
+4. **Come back to a PR and an Owner's brief.** The brief is written to fit on a phone screen, so I can read it, ask follow-up questions, and decide before I'm back at a computer.
 
-And I can have multiple issues in progress this way — I just start a session for each issue and let them run in parallel.
+5. **Land it on the Mac.** The cloud has no Xcode, so `/land-pr` runs locally, builds and tests what the cloud couldn't, and merges.
+
+Alongside cloud sessions, local sessions on my Mac are bridged to the Claude app with Remote Control, so I can steer and approve them from my phone too. A permission hook auto-approves safe commands, so parallel sessions rarely sit waiting on a prompt.
+
+By the time I'm back at my desk, there's usually a PR waiting with proper tests, consistent patterns, and code that follows the conventions documented in `CLAUDE.md` and the design docs. And I can have multiple issues in progress this way — I just start a session for each issue and let them run in parallel.
 
 ### Why This Works
 
@@ -578,6 +596,9 @@ This doesn't replace thinking about design or reviewing code. I still review eve
 | Cross-project context | `config.yaml` library registration | Claude knows about shared libraries |
 | Reusable workflows | `.claude/skills/` skills | Skills invoked as slash commands |
 | Project instructions | `CLAUDE.md` | Always-on context for every session |
-| Sub-agents | `Task` tool | Parallel exploration and implementation |
+| Sub-agents | `Agent` tool | Parallel reviews and audits, used sparingly |
 | Code sync | `/sync-designs` skill | Keep docs aligned with code |
-| Architecture checks | `/validate-arch` skill | Catch pattern violations |
+| Issue → PR | `/implement-issue` skill | Unattended implementation ending in an Owner's brief |
+| Review | GitHub Action + `/code-review`, `/process-review` | Fresh-eyes review on every push, triaged by severity |
+| Landing | `/land-pr` skill | Merge, then fix leftovers on main |
+| Parallel work | `/worktree-init`, Remote Control | Several sessions at once, steerable from the phone |
