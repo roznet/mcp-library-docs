@@ -9,6 +9,15 @@ This repo has two things:
 
 For a longer, essay-style write-up of the ideas, see [AI Dev Workflow Tips](ai-dev-workflow.md).
 
+## A real project built this way: flyfun-weather
+
+[**flyfun-weather**](https://github.com/roznet/flyfun-weather) is an aviation weather briefing tool (Python backend, web app and iOS app) where almost all of the code was written by Claude Code using this approach. It is public, so you can see the whole setup working rather than a sample:
+
+- [`designs/`](https://github.com/roznet/flyfun-weather/tree/main/designs): more than 50 design docs with an `INDEX.md`, plus the `future/`, `plans/`, `archive/` and `references/` lifecycle folders.
+- [`.claude/`](https://github.com/roznet/flyfun-weather/tree/main/.claude): the project `CLAUDE.md`, the skills (`implement-issue`, `land-pr`, `worktree-init`, `deploy`, …), and the review commands.
+- [`.github/workflows/claude-code-review.yml`](https://github.com/roznet/flyfun-weather/blob/main/.github/workflows/claude-code-review.yml): the review bot.
+- [**`HOW_TO.md`**](https://github.com/roznet/flyfun-weather/blob/main/HOW_TO.md): a detailed explanation of the workflow used to build the tool. It covers how design docs, issues, `/implement-issue`, the Owner's brief, review and landing, worktrees, memory and skills fit together, and ends with an [adoption checklist](https://github.com/roznet/flyfun-weather/blob/main/HOW_TO.md#adopting-this-in-your-own-project). This README covers the generic pieces. `HOW_TO.md` shows them in a real project, with its project-specific details left in.
+
 ---
 
 ## The idea in one paragraph
@@ -110,7 +119,7 @@ Docs only help while they're true. The rule that works: **the PR that changes be
 
 ### Stage 6: The issue → PR → land loop (adapt, don't copy)
 
-These skills are project-specific. Copy the *shape* and rewrite the details (test commands, toolchains, deploy targets) for the user's project. The reference versions are in [flyfun-weather/.claude](https://github.com/roznet/flyfun-weather/tree/main/.claude):
+These skills are project-specific. Read [flyfun-weather's `HOW_TO.md`](https://github.com/roznet/flyfun-weather/blob/main/HOW_TO.md#how-we-work) first for how they fit together, then copy the *shape* and rewrite the details (test commands, toolchains, deploy targets) for the user's project. The reference versions are in [flyfun-weather/.claude](https://github.com/roznet/flyfun-weather/tree/main/.claude):
 
 | Piece | Reference | What to keep when adapting |
 |---|---|---|
