@@ -58,17 +58,21 @@ claude mcp add --scope user library-docs -- python -m mcp_library_docs
 
 `--scope user` makes the server available in every project. Use the Python interpreter where the package was installed; with pipx or a venv, put its absolute path in place of `python`. Check the install by restarting Claude Code and running `/mcp`: `library-docs` should be listed with tools `list_libraries`, `get_design_doc` and `get_index_status`.
 
-### Stage 2: Install the `/sync-designs` skill (user-wide)
+### Stage 2: Install the design-doc skills (user-wide)
 
-The skill lives in this repo at [`.claude/skills/sync-designs/SKILL.md`](.claude/skills/sync-designs/SKILL.md). It writes `designs/` in exactly the format this server reads. Install it at user level so it works in every project:
+This repo ships two generic skills that write `designs/` in exactly the format this server reads:
+
+- [`sync-designs`](.claude/skills/sync-designs/SKILL.md): create a design doc from code, or sync one doc (or all docs) with the code. This is the everyday one.
+- [`sync-all-designs`](.claude/skills/sync-all-designs/SKILL.md): an occasional full consistency check. It fans out one subagent per doc through a resumable Workflow script bundled with the skill, then reconciles `INDEX.md` and proposes structural clean-ups (archive stale plans, promote built `future/` docs, flag orphans). It uses a lot of tokens, so it only runs when typed.
+
+Install them at user level so they work in every project:
 
 ```bash
 mkdir -p ~/.claude/skills
-ln -s "$(pwd)/.claude/skills/sync-designs" ~/.claude/skills/sync-designs   # run from a clone of this repo
-# or copy it: cp -r .claude/skills/sync-designs ~/.claude/skills/
+cp -r .claude/skills/sync-designs .claude/skills/sync-all-designs ~/.claude/skills/   # from a clone of this repo
 ```
 
-A symlink picks up updates when the clone is pulled. A copy lets the user customise it.
+Copy rather than symlink if the user will customise them. The repo versions are kept generic on purpose, and a personal copy can then add machine- or project-specific details. Use a symlink instead to pick up updates on `git pull`.
 
 ### Stage 3: Tell Claude to use the docs (global `CLAUDE.md`)
 
@@ -102,7 +106,7 @@ If the user has shared libraries or related repos, register them in `~/.config/m
 
 ### Stage 5: Keep docs in sync as part of the work
 
-Docs only help while they're true. The rule that works: **the PR that changes behaviour updates the design doc for the code it touched**, in the same PR, scoped to that code. Running `/sync-designs <doc>` before opening a PR does it. A full audit (`/sync-designs` with no arguments) is for occasional use.
+Docs only help while they're true. The rule that works: **the PR that changes behaviour updates the design doc for the code it touched**, in the same PR, scoped to that code. Running `/sync-designs <doc>` before opening a PR does it. A full audit (`/sync-designs` with no arguments, or `/sync-all-designs` on a large `designs/` folder) is for occasional use.
 
 ### Stage 6: The issue → PR → land loop (adapt, don't copy)
 

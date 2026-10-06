@@ -34,7 +34,7 @@ your-repo/
 └── src/
 ```
 
-`/sync-designs` isn't in that tree because it's installed once at user level (`~/.claude/skills/`) and used in every repo.
+`/sync-designs` and `/sync-all-designs` aren't in that tree because they're installed once at user level (`~/.claude/skills/`) and used in every repo. Generic versions ship in this repo.
 
 ### Why I Think It Works
 
@@ -284,7 +284,7 @@ These are the ones that earned their place, with links to the real files:
 
 Claude Code's `Agent` tool lets a session or skill spawn subagents with their own context. I use them less than you might expect: for parallel reviews of a big PR (one per language or area), for audits, and for an independent second opinion on a PR's brief. With good design docs, a single session usually has the context it needs, and that's cheaper than fanning out.
 
-For one heavy job I use a **Workflow** script instead: [`/sync-all-designs`](https://github.com/roznet/flyfun-weather/blob/main/.claude/commands/sync-all-designs.md) runs one subagent per design doc in a resumable workflow, then reconciles `INDEX.md`. It's expensive, so I run it occasionally rather than routinely.
+For one heavy job I use a **Workflow** script instead: [`/sync-all-designs`](.claude/skills/sync-all-designs/SKILL.md) runs one subagent per design doc in a resumable workflow, then reconciles `INDEX.md`. It's expensive, so I run it occasionally rather than routinely.
 
 ### CLAUDE.md: Project-Level Instructions
 
